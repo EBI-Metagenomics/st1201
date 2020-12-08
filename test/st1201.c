@@ -15,20 +15,27 @@ int main()
 
 static void test_st1201_uint8(void)
 {
-    FILE *stream = fopen("small.csv", "r");
+    FILE *stream = fopen("1bytes.csv", "r");
     cass_cond(stream != NULL);
     char line[256];
     char field[256];
 
+    unsigned row = 1;
     cass_cond(fgets(line, 256, stream) != NULL);
 
+    row++;
     while (fgets(line, 256, stream)) {
+        printf("Line num: %u\n", row);
+        row++;
 
         strcpy(field, line);
         int L = atoi(getfield(field, 1));
-        if (L > 1)
-            continue;
         printf("Field L would be %d\n", L);
+
+        strcpy(field, line);
+        double Z_o = 0.0;
+        sscanf(getfield(field, 2), "%lf", &Z_o);
+        printf("Field Z_o would be %lf\n", Z_o);
 
         double a = 0.0;
         strcpy(field, line);
@@ -45,6 +52,9 @@ static void test_st1201_uint8(void)
         sscanf(getfield(field, 6), "%" SCNu8, &y);
         strcpy(field, line);
         printf("Field y would be %u\n", y);
+
+        strcpy(field, line);
+        printf("Field yhex would be %s\n", getfield(field, 7));
 
         double xr = 0.0;
         strcpy(field, line);
@@ -66,14 +76,18 @@ static void test_st1201_uint8(void)
         sscanf(getfield(field, 11), "%lf", &x);
         printf("Field x would be %lf\n", x);
 
+        if (x < a || b < x)
+            continue;
+
         struct st1201_uint8 st1201;
-        st1201_init_uint8(a, b, (unsigned)L, &st1201);
+        cass_cond(st1201_init_uint8(a, b, (unsigned)L, &st1201) == 0);
+        cass_close(st1201.a, a);
+        cass_close(st1201.b, b);
         cass_close(st1201.S_f, S_f);
         cass_close(st1201.S_r, S_r);
+        cass_close(st1201.Z_o, Z_o);
         cass_equal_uint8(st1201_to_uint8(&st1201, x), y);
         cass_close(st1201_from_uint8(&st1201, y), xr);
-        /* cass_equal_uint16(st1201_to_uint8(&st1201, 1.5), 16384); */
-        /* cass_equal_uint16(st1201_to_uint8(&st1201, 2.0), 32768); */
     }
 
     fclose(stream);
