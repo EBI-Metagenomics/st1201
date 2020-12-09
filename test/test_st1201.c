@@ -1,21 +1,14 @@
-#include "st1201.h"
 #include "cass.h"
+#include "st1201.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-static void test_st1201_uint8(void);
 static const char *getfield(char *line, int num);
 
-int main()
+int main(void)
 {
-    test_st1201_uint8();
-    return cass_status();
-}
-
-static void test_st1201_uint8(void)
-{
-    FILE *stream = fopen("1bytes.csv", "r");
+    FILE *stream = fopen(ST1201_TEST_DATA_FILEPATH, "r");
     cass_cond(stream != NULL);
     char line[256];
     char field[256];
@@ -91,6 +84,7 @@ static void test_st1201_uint8(void)
     }
 
     fclose(stream);
+    return cass_status();
 }
 
 static const char *getfield(char *line, int num)
