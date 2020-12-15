@@ -7,7 +7,7 @@ file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/st1201.h"
 string(REGEX REPLACE ${VERSION_REGEX} "\\1" VERSION_STRING "${VERSION_STRING}")
 
 project(st1201 LANGUAGES C VERSION ${VERSION_STRING})
-set(PROJECT_DESCRIPTION "Implements the logarithm of the sum of exponentiations.")
+set(PROJECT_DESCRIPTION "MISB ST 1201: Floating Point to Integer Mapping.")
 
 # Generate compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
