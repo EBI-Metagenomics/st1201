@@ -2,6 +2,7 @@
 #define ST1201_TEST_PARSE_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 struct line
