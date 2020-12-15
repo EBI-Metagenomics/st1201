@@ -1,6 +1,6 @@
 function(st1201_add_test name cfile data_filepath)
 
-  add_executable(${name} ${cfile})
+  add_executable(${name} ${cfile} "parse.c")
   target_link_libraries(${name} ST1201::st1201)
   set_target_properties(${name} PROPERTIES C_STANDARD 99)
   add_test(NAME ${name} COMMAND ${name})
@@ -15,10 +15,9 @@ function(st1201_add_test name cfile data_filepath)
 
 endfunction()
 
-file(COPY data/1bytes.csv DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/data")
-file(COPY data/2bytes.csv DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/data")
-file(COPY data/4bytes.csv DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/data")
-file(COPY data/8bytes.csv DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/data")
+file(COPY data/bench.csv DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/data")
 
-st1201_add_test(test_st1201_1bytes "test_st1201_uint8.c" "${CMAKE_CURRENT_BINARY_DIR}/data/1bytes.csv")
-st1201_add_test(test_st1201_2bytes "test_st1201_uint16.c" "${CMAKE_CURRENT_BINARY_DIR}/data/2bytes.csv")
+st1201_add_test(test_st1201_uint8 "test_st1201_uint8.c" "${CMAKE_CURRENT_BINARY_DIR}/data/bench.csv")
+st1201_add_test(test_st1201_uint16 "test_st1201_uint16.c" "${CMAKE_CURRENT_BINARY_DIR}/data/bench.csv")
+st1201_add_test(test_st1201_uint32 "test_st1201_uint32.c" "${CMAKE_CURRENT_BINARY_DIR}/data/bench.csv")
+st1201_add_test(test_st1201_uint64 "test_st1201_uint64.c" "${CMAKE_CURRENT_BINARY_DIR}/data/bench.csv")

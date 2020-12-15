@@ -27,84 +27,120 @@ static uint8_t const NEGATIVE_SIGNAL_NAN_HIGH_BYTE = 0xF8;
 static uint8_t const HIGH_BITS_MASK = 0xF8;
 static uint8_t const LOW_BITS_MASK = 0x07;
 
-struct st1201_uint8
+struct st1201
 {
     double a;   /** Left bound on the floating-point */
     double b;   /** Right bound on the floating-point */
     double S_f; /** Scaling for forward mapping */
     double S_r; /** Scaling for reverse mapping */
     double Z_o; /** Zero offset */
+};
+
+struct st1201_uint8
+{
+    struct st1201 impl;
 };
 
 struct st1201_uint16
 {
-    double a;   /** Left bound on the floating-point */
-    double b;   /** Right bound on the floating-point */
-    double S_f; /** Scaling for forward mapping */
-    double S_r; /** Scaling for reverse mapping */
-    double Z_o; /** Zero offset */
+    struct st1201 impl;
 };
 
 struct st1201_uint32
 {
-    double a;   /** Left bound on the floating-point */
-    double b;   /** Right bound on the floating-point */
-    double S_f; /** Scaling for forward mapping */
-    double S_r; /** Scaling for reverse mapping */
-    double Z_o; /** Zero offset */
+    struct st1201 impl;
 };
 
 struct st1201_uint64
 {
-    double a;   /** Left bound on the floating-point */
-    double b;   /** Right bound on the floating-point */
-    double S_f; /** Scaling for forward mapping */
-    double S_r; /** Scaling for reverse mapping */
-    double Z_o; /** Zero offset */
+    struct st1201 impl;
 };
 
-#if defined(HAVE_ATTR_FORMAT)
-#define ATTR_FORMAT __attribute__((format(printf, 1, 2)))
-#else
-#define ATTR_FORMAT
-#endif
+inline static int _st1201_init(double a, double b, unsigned nbytes,
+                               struct st1201 *st1201);
 
-inline static void st1201_error(char const *err, ...)
-{
-    va_list params;
-    va_start(params, err);
-    vfprintf(stderr, err, params);
-    fputc('\n', stderr);
-    va_end(params);
-}
+#define ST1201_MAKE_INIT_TYPE_FUNC(B)                                                  \
+    inline static int st1201_init_uint##B(double a, double b,                          \
+                                          struct st1201_uint##B *st1201)               \
+    {                                                                                  \
+        return _st1201_init(a, b, B / 8, &st1201->impl);                               \
+    }
 
-static inline void st1201_die(char const *err, ...)
-{
-    va_list params;
-    va_start(params, err);
-    st1201_error(err, params);
-    va_end(params);
-    exit(1);
-}
+ST1201_MAKE_INIT_TYPE_FUNC(8)
+ST1201_MAKE_INIT_TYPE_FUNC(16)
+ST1201_MAKE_INIT_TYPE_FUNC(32)
+ST1201_MAKE_INIT_TYPE_FUNC(64)
 
-inline static int st1201_init_uint8(double a, double b, unsigned nbytes,
-                                    struct st1201_uint8 *st1201)
+#define ST1201_MAKE_TO_TYPE_FUNC(B)                                                    \
+    inline static uint##B##_t st1201_to_uint##B(struct st1201_uint##B *st1201,         \
+                                                double x)                              \
+    {                                                                                  \
+        unsigned const nshifts = B - 8;                                                \
+        if (x == +INFINITY)                                                            \
+            return ((uint##B##_t)POSITIVE_INFINITY_HIGH_BYTE) << nshifts;              \
+        else if (x == -INFINITY)                                                       \
+            return ((uint##B##_t)NEGATIVE_INFINITY_HIGH_BYTE) << nshifts;              \
+        else if (isnan(x)) {                                                           \
+            if (signbit(x))                                                            \
+                return ((uint##B##_t)NEGATIVE_QUIET_NAN_HIGH_BYTE) << nshifts;         \
+            else                                                                       \
+                return ((uint##B##_t)POSITIVE_QUIET_NAN_HIGH_BYTE) << nshifts;         \
+        }                                                                              \
+        if (x < st1201->impl.a || st1201->impl.b < x)                                  \
+            return ((uint##B##_t)NEGATIVE_QUIET_NAN_HIGH_BYTE) << nshifts;             \
+                                                                                       \
+        return (uint##B##_t)(st1201->impl.S_f * (x - st1201->impl.a) +                 \
+                             st1201->impl.Z_o);                                        \
+    }
+
+ST1201_MAKE_TO_TYPE_FUNC(8)
+ST1201_MAKE_TO_TYPE_FUNC(16)
+ST1201_MAKE_TO_TYPE_FUNC(32)
+ST1201_MAKE_TO_TYPE_FUNC(64)
+
+#define ST1201_MAKE_FROM_TYPE_NORMAL_FUNC(B)                                           \
+    inline static double st1201_from_uint##B##_normal(struct st1201_uint##B *st1201,   \
+                                                      uint##B##_t y)                   \
+    {                                                                                  \
+        return (st1201->impl.S_r * (y - st1201->impl.Z_o) + st1201->impl.a);           \
+    }
+
+ST1201_MAKE_FROM_TYPE_NORMAL_FUNC(8)
+ST1201_MAKE_FROM_TYPE_NORMAL_FUNC(16)
+ST1201_MAKE_FROM_TYPE_NORMAL_FUNC(32)
+ST1201_MAKE_FROM_TYPE_NORMAL_FUNC(64)
+
+#define ST1201_MAKE_FROM_TYPE_FUNC(B)                                                  \
+    inline static double st1201_from_uint##B(struct st1201_uint##B *st1201,            \
+                                             uint##B##_t y)                            \
+    {                                                                                  \
+        unsigned const nshifts = B - 8;                                                \
+        uint8_t high_bits = (uint8_t)(y >> nshifts);                                   \
+                                                                                       \
+        if ((high_bits & 0x80) == 0x00) {                                              \
+            return st1201_from_uint##B##_normal(st1201, y);                            \
+        } else if (y == ((uint##B##_t)0x80) << nshifts) {                              \
+            return st1201_from_uint##B##_normal(st1201, y);                            \
+        }                                                                              \
+                                                                                       \
+        high_bits &= HIGH_BITS_MASK;                                                   \
+        if (high_bits == POSITIVE_INFINITY_HIGH_BYTE)                                  \
+            return +INFINITY;                                                          \
+        else if (high_bits == NEGATIVE_INFINITY_HIGH_BYTE)                             \
+            return -INFINITY;                                                          \
+        return NAN;                                                                    \
+    }
+
+ST1201_MAKE_FROM_TYPE_FUNC(8)
+ST1201_MAKE_FROM_TYPE_FUNC(16)
+ST1201_MAKE_FROM_TYPE_FUNC(32)
+ST1201_MAKE_FROM_TYPE_FUNC(64)
+
+inline static int _st1201_init(double a, double b, unsigned nbytes,
+                               struct st1201 *st1201)
 {
     unsigned const L = nbytes;
-
-    /* double const b_pow_tmp = ceil(log2(b - a)); */
     double const b_pow = ceil(log2(b - a));
-    /* if (b_pow_tmp > UINT_MAX) { */
-    /*     st1201_error("b_pow overflow"); */
-    /*     return 1; */
-    /* } */
-    /* unsigned const b_pow = (unsigned)b_pow_tmp; */
-
-    /* if (8 * L - 1 > UINT_MAX) { */
-    /*     st1201_error("d_pow overflow"); */
-    /*     return 1; */
-    /* } */
-    /* unsigned const d_pow = 8 * L - 1; */
     double const d_pow = 8 * L - 1;
 
     st1201->a = a;
@@ -113,219 +149,12 @@ inline static int st1201_init_uint8(double a, double b, unsigned nbytes,
     st1201->S_f = pow(2.0, d_pow - b_pow);
     st1201->S_r = pow(2.0, b_pow - d_pow);
 
-    /* if (d_pow >= b_pow) { */
-    /*     st1201->S_f = (double)(1 << (d_pow - b_pow)); */
-    /*     st1201->S_r = 1.0 / st1201->S_f; */
-    /* } else { */
-    /*     st1201->S_r = (double)(1 << (b_pow - d_pow)); */
-    /*     st1201->S_f = 1.0 / st1201->S_r; */
-    /* } */
-
     if (a < 0 && b > 0)
         st1201->Z_o = st1201->S_f * a - floor(st1201->S_f * a);
     else
         st1201->Z_o = 0.0;
 
     return 0;
-}
-
-inline static int st1201_init_uint16(double a, double b, unsigned nbytes,
-                                     struct st1201_uint16 *st1201)
-{
-    unsigned const L = nbytes;
-
-    /* double const b_pow_tmp = ceil(log2(b - a)); */
-    double const b_pow = ceil(log2(b - a));
-    /* if (b_pow_tmp > UINT_MAX) { */
-    /*     st1201_error("b_pow overflow"); */
-    /*     return 1; */
-    /* } */
-    /* unsigned const b_pow = (unsigned)b_pow_tmp; */
-
-    /* if (8 * L - 1 > UINT_MAX) { */
-    /*     st1201_error("d_pow overflow"); */
-    /*     return 1; */
-    /* } */
-    /* unsigned const d_pow = 8 * L - 1; */
-    double const d_pow = 8 * L - 1;
-
-    st1201->a = a;
-    st1201->b = b;
-
-    st1201->S_f = pow(2.0, d_pow - b_pow);
-    st1201->S_r = pow(2.0, b_pow - d_pow);
-
-    /* if (d_pow >= b_pow) { */
-    /*     st1201->S_f = (double)(1 << (d_pow - b_pow)); */
-    /*     st1201->S_r = 1.0 / st1201->S_f; */
-    /* } else { */
-    /*     st1201->S_r = (double)(1 << (b_pow - d_pow)); */
-    /*     st1201->S_f = 1.0 / st1201->S_r; */
-    /* } */
-
-    if (a < 0 && b > 0)
-        st1201->Z_o = st1201->S_f * a - floor(st1201->S_f * a);
-    else
-        st1201->Z_o = 0.0;
-
-    return 0;
-}
-
-/* inline static int st1201_init_precision(double left, double right, double prec, */
-/*                                         struct st1201 *st1201) */
-/* { */
-/*     double const a = left; */
-/*     double const b = right; */
-/*     double const g = prec; */
-/*     double const L_bits = ceil(log2(b - a)) - floor(log2(g)) + 1; */
-/*     double const L_tmp = ceil(L_bits / 8.0); */
-
-/*     if (L_tmp > UINT_MAX) { */
-/*         st1201_error("L overflow"); */
-/*         return 1; */
-/*     } */
-/*     if (L_tmp < 1.0) { */
-/*         st1201_error("L must be positive"); */
-/*         return 1; */
-/*     } */
-/*     unsigned const L = (unsigned)L_tmp; */
-/*     return st1201_init(a, b, L, st1201); */
-/* } */
-
-/* inline static uint32_t st1201_to_uint32(struct st1201 *st1201, double x) */
-/* { */
-/*     return (uint32_t)(st1201->S_f * (x - st1201->a) + st1201->Z_o); */
-/* } */
-
-/* inline static double st1201_from_uint32(struct st1201 *st1201, uint32_t y) */
-/* { */
-/*     return st1201->S_r * (y - st1201->Z_o) + st1201->a; */
-/* } */
-
-/* inline static int32_t st1201_to_int32(struct st1201 *st1201, double x) */
-/* { */
-/*     return (int32_t)(st1201->S_f * (x - st1201->a) + st1201->Z_o); */
-/* } */
-
-/* inline static double st1201_from_int32(struct st1201 *st1201, int32_t y) */
-/* { */
-/*     return st1201->S_r * (y - st1201->Z_o) + st1201->a; */
-/* } */
-
-/* inline static uint16_t st1201_to_uint16(struct st1201 *st1201, double x) */
-/* { */
-/*     return (uint16_t)(st1201->S_f * (x - st1201->a) + st1201->Z_o); */
-/* } */
-
-/* inline static double st1201_from_uint16(struct st1201 *st1201, uint16_t y) */
-/* { */
-/*     return st1201->S_r * (y - st1201->Z_o) + st1201->a; */
-/* } */
-
-/* inline static int16_t st1201_to_int16(struct st1201 *st1201, double x) */
-/* { */
-/*     return (int16_t)(st1201->S_f * (x - st1201->a) + st1201->Z_o); */
-/* } */
-
-/* inline static double st1201_from_int16(struct st1201 *st1201, int16_t y) */
-/* { */
-/*     return st1201->S_r * (y - st1201->Z_o) + st1201->a; */
-/* } */
-
-inline static uint8_t st1201_to_uint8(struct st1201_uint8 *st1201, double x)
-{
-    if (x == +INFINITY)
-        return POSITIVE_INFINITY_HIGH_BYTE;
-    else if (x == -INFINITY)
-        return NEGATIVE_INFINITY_HIGH_BYTE;
-    else if (isnan(x)) {
-        if (signbit(x))
-            return NEGATIVE_QUIET_NAN_HIGH_BYTE;
-        else
-            return POSITIVE_QUIET_NAN_HIGH_BYTE;
-    }
-    if (x < st1201->a || st1201->b < x)
-        st1201_die("x must be in [%e, %e]", st1201->a, st1201->b);
-    return (uint8_t)(st1201->S_f * (x - st1201->a) + st1201->Z_o);
-}
-
-inline static uint16_t st1201_to_uint16(struct st1201_uint16 *st1201, double x)
-{
-    if (x == +INFINITY)
-        return ((uint16_t)POSITIVE_INFINITY_HIGH_BYTE) << 8;
-    else if (x == -INFINITY)
-        return ((uint16_t)NEGATIVE_INFINITY_HIGH_BYTE) << 8;
-    else if (isnan(x)) {
-        if (signbit(x))
-            return ((uint16_t)NEGATIVE_QUIET_NAN_HIGH_BYTE) << 8;
-        else
-            return ((uint16_t)POSITIVE_QUIET_NAN_HIGH_BYTE) << 8;
-    }
-    if (x < st1201->a || st1201->b < x)
-        st1201_die("x must be in [%e, %e]", st1201->a, st1201->b);
-    return (uint16_t)(st1201->S_f * (x - st1201->a) + st1201->Z_o);
-}
-
-inline static double st1201_from_uint8_normal(struct st1201_uint8 *st1201, uint8_t y)
-{
-    return st1201->S_r * (y - st1201->Z_o) + st1201->a;
-}
-
-inline static double st1201_from_uint16_normal(struct st1201_uint16 *st1201, uint16_t y)
-{
-    return st1201->S_r * (y - st1201->Z_o) + st1201->a;
-}
-
-inline static double st1201_from_uint8(struct st1201_uint8 *st1201, uint8_t y)
-{
-    if ((y & 0x80) == 0x00) {
-        return st1201_from_uint8_normal(st1201, y);
-    } else if (y == 0x80) {
-        return st1201_from_uint8_normal(st1201, y);
-        /* boolean allZeros = true; */
-        /* for (int i = offset + 1; i < offset + fieldLength; i++) { */
-        /*     if (bytes[i] != (byte) 0x00) { */
-        /*         allZeros = false; */
-        /*         break; */
-        /*     } */
-        /* } */
-        /* if (allZeros) { */
-        /*     return st1201_from_uint8_normal(bytes, offset); */
-        /* } */
-    }
-    /* byte highByteHighBits = (byte) (bytes[offset] & HIGH_BITS_MASK); */
-    /* if (highByteHighBits == POSITIVE_INFINITY_HIGH_BYTE) { */
-    /*     return Double.POSITIVE_INFINITY; */
-    /* } else if (highByteHighBits == NEGATIVE_INFINITY_HIGH_BYTE) { */
-    /*     return Double.NEGATIVE_INFINITY; */
-    /* } else { */
-    /*     return Double.NaN; */
-    /* } */
-
-    uint8_t high_bits = y & HIGH_BITS_MASK;
-    if (high_bits == POSITIVE_INFINITY_HIGH_BYTE)
-        return +INFINITY;
-    else if (high_bits == NEGATIVE_INFINITY_HIGH_BYTE)
-        return -INFINITY;
-    return NAN;
-}
-
-inline static double st1201_from_uint16(struct st1201_uint16 *st1201, uint16_t y)
-{
-    uint8_t high_bits = (uint8_t)(y >> 8);
-
-    if ((high_bits & 0x80) == 0x00) {
-        return st1201_from_uint16_normal(st1201, y);
-    } else if (y == 0x8000) {
-        return st1201_from_uint16_normal(st1201, y);
-    }
-
-    high_bits &= HIGH_BITS_MASK;
-    if (high_bits == POSITIVE_INFINITY_HIGH_BYTE)
-        return +INFINITY;
-    else if (high_bits == NEGATIVE_INFINITY_HIGH_BYTE)
-        return -INFINITY;
-    return NAN;
 }
 
 #endif
