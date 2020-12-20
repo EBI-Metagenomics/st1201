@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5.1 FATAL_ERROR)
 
 # Fetch version from header
 set(VERSION_REGEX "#define ST1201_VERSION[ \t]+\"(.+)\"")
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/st1201.h"
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/st1201/st1201.h"
   VERSION_STRING REGEX ${VERSION_REGEX})
 string(REGEX REPLACE ${VERSION_REGEX} "\\1" VERSION_STRING "${VERSION_STRING}")
 

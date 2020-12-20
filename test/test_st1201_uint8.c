@@ -1,6 +1,6 @@
 #include "cass.h"
 #include "parse.h"
-#include "st1201.h"
+#include "st1201/st1201.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
