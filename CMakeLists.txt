@@ -12,16 +12,37 @@ set(PROJECT_DESCRIPTION "MISB ST 1201: Floating Point to Integer Mapping.")
 # Generate compile_commands.json file
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_library(st1201 INTERFACE)
+add_library(st1201 src/st1201.c)
 add_library(ST1201::st1201 ALIAS st1201)
-target_include_directories(st1201
-  INTERFACE
-    $<INSTALL_INTERFACE:include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-)
-target_link_libraries(st1201 INTERFACE $<$<BOOL:${UNIX}>:m>)
 
-install(TARGETS st1201 EXPORT st1201-targets)
+if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+    set(WARNING_FLAGS /W3)
+else()
+    set(WARNING_FLAGS -Wall -Wextra -pedantic -Wstrict-prototypes -Wshadow
+        -Wconversion -Wmissing-prototypes -Wno-unused-parameter -Wsign-conversion
+    )
+endif()
+
+target_include_directories(st1201
+    PUBLIC
+        $<INSTALL_INTERFACE:include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+set_target_properties(st1201 PROPERTIES VERSION ${PROJECT_VERSION})
+set_target_properties(st1201 PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR})
+set_target_properties(st1201 PROPERTIES C_STANDARD 99)
+target_link_libraries(st1201 INTERFACE $<$<BOOL:${UNIX}>:m>)
+target_compile_options(st1201 PRIVATE ${WARNING_FLAGS})
+
+install(TARGETS st1201 EXPORT st1201-targets
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    PUBLIC_HEADER DESTINATION include
+)
 install(DIRECTORY include/ DESTINATION include)
 
 # Export the targets to a script
